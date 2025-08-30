@@ -6,6 +6,6 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/app.py" },
     { "source": "/admin", "destination": "/admin.html" },
-    { "source": "/(?!static/|api/|.*\\..*)(.*)", "destination": "/index.html" }
+    { "source": "/", "destination": "/index.html" }
   ]
 }
