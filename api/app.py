@@ -6,13 +6,9 @@ import markdown as md
 from openai import OpenAI
 
 # ======================================================
-# 🔑 OpenAI Configuration (API key from environment)
-#    Accept OPENAI_API_KEY (preferred), fallback to SECRET_KEY
+# 🔑 OpenAI Configuration (replace with your own key!)
 # ======================================================
 OPENAI_API_KEY = "sk-svcacct-vPTeI5m4lr8Omi8Nl--zFO2Dar97AIqPeW3xQH0zYKh80vP-ET34un9o0Fs8xT3BlbkFJuuj6Waf1AhBJnB9YHqmrbEAaXT3yqNyNtmYdmr7mx7leDOzZ-oQTSt6bhEbAA"
-if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY not found in environment variables.")
-
 # Choose defaults (can be overridden in /api/ask by `mode`)
 DEFAULT_MODE = "fast"   # fast | quality | cheap
 CHAT_MODELS = {
@@ -140,32 +136,6 @@ except Exception as e:
 # ======================================================
 # 🌐 Routes
 # ======================================================
-
-# --- Simple health/ping routes for quick checks ---
-@app.route("/api/ping")
-def ping():
-    return jsonify({"ok": True, "service": "orbit-onboarding-assistant"})
-
-@app.route("/api/echo", methods=["GET", "POST"])
-def echo():
-    payload = request.get_json(silent=True) or {}
-    return jsonify({"ok": True, "method": request.method, "payload": payload})
-
-@app.route("/api/selfcheck")
-def selfcheck():
-    """Lightweight end-to-end check: OpenAI reachable + embeddings work."""
-    try:
-        emb = client.embeddings.create(model=EMBED_MODEL, input=["ping"])
-        dim = len(emb.data[0].embedding)
-        return jsonify({
-            "ok": True,
-            "openai": "reachable",
-            "embedding_model": EMBED_MODEL,
-            "embedding_dim": dim
-        })
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
 @app.route("/api/ask", methods=["POST"])
 def ask():
     data = request.get_json(silent=True) or {}
@@ -201,7 +171,7 @@ def health():
         "default_mode": DEFAULT_MODE
     })
 
-# Serve UI pages (useful locally; Vercel serves static files directly)
+# Serve UI pages
 @app.route("/")
 def root():
     return send_from_directory(os.path.join(APP_DIR, ".."), "index.html")
@@ -214,4 +184,4 @@ def admin_page():
 # 🏁 Run locally
 # ======================================================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=True)
