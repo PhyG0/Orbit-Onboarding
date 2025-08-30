@@ -7,8 +7,9 @@ from openai import OpenAI
 
 # ======================================================
 # 🔑 OpenAI Configuration (API key from environment)
+#    Accept OPENAI_API_KEY (preferred), fallback to SECRET_KEY
 # ======================================================
-OPENAI_API_KEY = os.getenv("SECRET_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("SECRET_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY not found in environment variables.")
 
@@ -139,6 +140,32 @@ except Exception as e:
 # ======================================================
 # 🌐 Routes
 # ======================================================
+
+# --- Simple health/ping routes for quick checks ---
+@app.route("/api/ping")
+def ping():
+    return jsonify({"ok": True, "service": "orbit-onboarding-assistant"})
+
+@app.route("/api/echo", methods=["GET", "POST"])
+def echo():
+    payload = request.get_json(silent=True) or {}
+    return jsonify({"ok": True, "method": request.method, "payload": payload})
+
+@app.route("/api/selfcheck")
+def selfcheck():
+    """Lightweight end-to-end check: OpenAI reachable + embeddings work."""
+    try:
+        emb = client.embeddings.create(model=EMBED_MODEL, input=["ping"])
+        dim = len(emb.data[0].embedding)
+        return jsonify({
+            "ok": True,
+            "openai": "reachable",
+            "embedding_model": EMBED_MODEL,
+            "embedding_dim": dim
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.route("/api/ask", methods=["POST"])
 def ask():
     data = request.get_json(silent=True) or {}
@@ -174,7 +201,7 @@ def health():
         "default_mode": DEFAULT_MODE
     })
 
-# Serve UI pages
+# Serve UI pages (useful locally; Vercel serves static files directly)
 @app.route("/")
 def root():
     return send_from_directory(os.path.join(APP_DIR, ".."), "index.html")
