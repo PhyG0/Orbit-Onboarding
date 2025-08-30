@@ -1,29 +1,14 @@
 {
   "functions": {
-    "api/app.py": {
+    "api/*.py": {
       "runtime": "python3.11"
     }
   },
-  "routes": [
+  "cleanUrls": true,
+  "rewrites": [
     {
-      "src": "^/api/ask$",
-      "dest": "/api/app.py"
-    },
-    {
-      "src": "^/api/reindex$",
-      "dest": "/api/app.py"
-    },
-    {
-      "src": "/static/(.*)",
-      "dest": "/static/$1"
-    },
-    {
-      "src": "/",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/admin",
-      "dest": "/admin.html"
+      "source": "/api/(.*)",
+      "destination": "/api/app.py"
     }
   ]
 }
