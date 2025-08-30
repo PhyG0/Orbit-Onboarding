@@ -9,7 +9,7 @@ from openai import OpenAI
 # 🔑 OpenAI Configuration (API key from environment)
 #    Accept OPENAI_API_KEY (preferred), fallback to SECRET_KEY
 # ======================================================
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("SECRET_KEY")
+OPENAI_API_KEY = "sk-svcacct-vPTeI5m4lr8Omi8Nl--zFO2Dar97AIqPeW3xQH0zYKh80vP-ET34un9o0Fs8xT3BlbkFJuuj6Waf1AhBJnB9YHqmrbEAaXT3yqNyNtmYdmr7mx7leDOzZ-oQTSt6bhEbAA"
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY not found in environment variables.")
 
