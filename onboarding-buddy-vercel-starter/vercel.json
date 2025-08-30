@@ -1,9 +1,0 @@
-{
-  "functions": {
-    "api/*.py": { "runtime": "python3.11" }
-  },
-  "cleanUrls": true,
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/app.py" }
-  ]
-}
