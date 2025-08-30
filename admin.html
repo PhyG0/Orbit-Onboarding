@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>OrbitOA Admin</title>
+  <link rel="icon" href="/static/logo.svg">
+  <link rel="stylesheet" href="/static/styles.css"/>
+</head>
+<body>
+  <div class="bg-orbit"></div>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/static/logo.svg" alt="logo" class="logo"/>
+      <div class="brand-text">
+        <h1>OrbitOA Admin</h1>
+        <p class="tag">Rebuild the knowledge index after updating docs.</p>
+      </div>
+    </div>
+    <div class="actions">
+      <a class="btn outline" href="/">← Back to OrbitOA</a>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="panel glass">
+      <div class="panel-header">
+        <h2>Reindex</h2>
+        <p class="muted">Make sure your updated files are in the <code>/docs</code> folder.</p>
+      </div>
+      <div class="reindex-row">
+        <button id="reindex" class="btn primary">Reindex Now</button>
+        <span id="status" class="muted"></span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="panel-header">
+        <h2>Docs Path</h2>
+      </div>
+      <pre class="muted small">/docs (project root)</pre>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>© OrbitOA • Admin</span>
+  </footer>
+
+  <script>
+    document.getElementById('reindex').onclick = async () => {
+      const res = await fetch('/api/reindex', {method:'POST'});
+      const data = await res.json();
+      document.getElementById('status').textContent = data.message || 'Done.';
+    };
+  </script>
+</body>
+</html>
