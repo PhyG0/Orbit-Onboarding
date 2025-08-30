@@ -1,0 +1,29 @@
+{
+  "functions": {
+    "api/app.py": {
+      "runtime": "python3.11"
+    }
+  },
+  "routes": [
+    {
+      "src": "^/api/ask$",
+      "dest": "/api/app.py"
+    },
+    {
+      "src": "^/api/reindex$",
+      "dest": "/api/app.py"
+    },
+    {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/admin",
+      "dest": "/admin.html"
+    }
+  ]
+}
