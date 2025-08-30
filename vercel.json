@@ -2,9 +2,10 @@
   "functions": {
     "api/*.py": { "runtime": "python3.11" }
   },
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/app.py" },
-    { "src": "/admin", "dest": "/admin.html" },
-    { "src": "/", "dest": "/index.html" }
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/app.py" },
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/", "destination": "/index.html" }
   ]
 }
