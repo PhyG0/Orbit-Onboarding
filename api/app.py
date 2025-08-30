@@ -8,7 +8,7 @@ from openai import OpenAI
 # ======================================================
 # 🔑 OpenAI Configuration (replace with your own key!)
 # ======================================================
-OPENAI_API_KEY = "sk-svcacct-vPTeI5m4lr8Omi8Nl--zFO2Dar97AIqPeW3xQH0zYKh80vP-ET34un9o0Fs8xT3BlbkFJuuj6Waf1AhBJnB9YHqmrbEAaXT3yqNyNtmYdmr7mx7leDOzZ-oQTSt6bhEbAA"
+OPENAI_API_KEY = "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"
 # Choose defaults (can be overridden in /api/ask by `mode`)
 DEFAULT_MODE = "fast"   # fast | quality | cheap
 CHAT_MODELS = {
