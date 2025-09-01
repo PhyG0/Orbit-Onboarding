@@ -1,3 +1,4 @@
+# api/app.py
 import os, re, glob
 from flask import Flask, request, jsonify, send_from_directory
 import numpy as np
@@ -5,64 +6,56 @@ from pypdf import PdfReader
 import markdown as md
 from openai import OpenAI
 
-# ============================
-# (Dev only) load .env.local if present
-# ============================
+# ---------------- Paths ----------------
+APP_DIR  = os.path.dirname(__file__)                           # /.../repo/api
+ROOT_DIR = os.path.abspath(os.path.join(APP_DIR, os.pardir))   # /.../repo
+
+# (dev only) load .env.local from root or api if present
 try:
     from dotenv import load_dotenv
-    load_dotenv(".env.local")
+    load_dotenv(os.path.join(ROOT_DIR, ".env.local"))
+    load_dotenv(os.path.join(APP_DIR,  ".env.local"))
 except Exception:
     pass
 
-# ======================================================
-# 🔑 OpenAI Configuration (from environment)
-# ======================================================
+# ---------------- OpenAI config ----------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("Missing OPENAI_API_KEY. Set it in your host's Environment Variables.")
 
-# Choose defaults (can be overridden in /api/ask by `mode`)
 DEFAULT_MODE = "fast"   # fast | quality | cheap
 CHAT_MODELS = {
     "fast":    "gpt-4o-mini",
     "quality": "gpt-4.1-mini",
-    "cheap":   "gpt-4o-mini"
+    "cheap":   "gpt-4o-mini",
 }
 EMBED_MODEL = "text-embedding-3-small"
-EMBED_DIM = 1536  # embedding size for text-embedding-3-small
+EMBED_DIM   = 1536
 
-# OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# ======================================================
-# 📂 Project paths (keep folders next to this file)
-# ======================================================
-APP_DIR = os.path.dirname(__file__)
-STATIC_DIR = os.path.join(APP_DIR, "static")
-DOCS_DIR   = os.path.join(APP_DIR, "docs")
+# ---------------- Project folders (root-level) ----------------
+STATIC_DIR = os.path.join(ROOT_DIR, "static")
+DOCS_DIR   = os.path.join(ROOT_DIR, "docs")
 
-# Flask app
+# ---------------- Flask app ----------------
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="/static")
 
-# ======================================================
-# 🧠 Global memory (vectors)
-# ======================================================
-VECTORS = None        # np.ndarray [n, d]
-CHUNKS = []           # list[str]
-SOURCES = []          # list[str]
-INDEX_READY = False   # lazy-build flag
+# ---------------- In-memory index ----------------
+VECTORS = None
+CHUNKS: list[str] = []
+SOURCES: list[str] = []
+INDEX_READY = False
 
-# ======================================================
-# 🔧 Helper functions
-# ======================================================
-def read_txt_md(path):
+# ---------------- Helpers ----------------
+def read_txt_md(path: str) -> str:
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         text = f.read()
     text = md.markdown(text)
-    text = re.sub("<[^<]+?>", " ", text)
+    text = re.sub(r"<[^<]+?>", " ", text)
     return text
 
-def read_pdf(path):
+def read_pdf(path: str) -> str:
     reader = PdfReader(path)
     pages = [(p.extract_text() or "") for p in reader.pages]
     return "\n".join(pages)
@@ -106,7 +99,7 @@ def cosine_sim(all_vecs, qvec):
     return np.dot(all_norm, qnorm)
 
 def build_index():
-    """(Re)build the in-memory index. Safe to call multiple times."""
+    """(Re)builds the vector index in memory."""
     global VECTORS, CHUNKS, SOURCES, INDEX_READY
     CHUNKS, SOURCES = [], []
     docs = load_documents()
@@ -117,11 +110,10 @@ def build_index():
     if CHUNKS:
         VECTORS = embed_texts(CHUNKS)
     else:
-        VECTORS = np.zeros((0, EMBED_DIM), dtype=np.float32)  # keep embed dim stable
+        VECTORS = np.zeros((0, EMBED_DIM), dtype=np.float32)
     INDEX_READY = True
 
 def ensure_index():
-    """Lazy build to avoid heavy work during cold boot."""
     global INDEX_READY
     if not INDEX_READY:
         build_index()
@@ -144,28 +136,16 @@ def call_llm(system_prompt, user_prompt, mode=None):
         resp = client.chat.completions.create(
             model=model,
             messages=[
-                {"role":"system","content":system_prompt},
-                {"role":"user","content":user_prompt}
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
             ],
-            temperature=0.2
+            temperature=0.2,
         )
         return resp.choices[0].message.content, model
     except Exception as e:
-        # Return an error message to the client (helps with logs on Render)
         return f"LLM error: {e}", model
 
-# ======================================================
-# 🚀 Cold start indexing (best-effort, non-fatal)
-# ======================================================
-try:
-    # Optionally skip initial build; lazy build will handle first request
-    pass
-except Exception as e:
-    print("Index build error at startup (will lazy-build later):", e)
-
-# ======================================================
-# 🌐 Routes
-# ======================================================
+# ---------------- Routes ----------------
 @app.route("/api/ask", methods=["POST"])
 def ask():
     data = request.get_json(silent=True) or {}
@@ -201,22 +181,30 @@ def health():
         "chat_models": CHAT_MODELS,
         "default_mode": DEFAULT_MODE,
         "index_ready": INDEX_READY,
-        "chunks": len(CHUNKS)
+        "chunks": len(CHUNKS),
     })
 
-# Serve UI pages
+# Serve root/admin from repo ROOT (since index.html/admin.html are at root)
 @app.route("/")
 def root():
-    return send_from_directory(APP_DIR, "index.html")
+    candidate = os.path.join(ROOT_DIR, "index.html")
+    if os.path.exists(candidate):
+        return send_from_directory(ROOT_DIR, "index.html")
+    return (
+        "<!doctype html><meta charset='utf-8'>"
+        "<h1>Server is running ✅</h1>"
+        "<p>Open <code>/api/health</code> or POST <code>/api/ask</code>.</p>",
+        200,
+    )
 
 @app.route("/admin")
 def admin_page():
-    return send_from_directory(APP_DIR, "admin.html")
+    candidate = os.path.join(ROOT_DIR, "admin.html")
+    if os.path.exists(candidate):
+        return send_from_directory(ROOT_DIR, "admin.html")
+    return ("Admin UI not found (place admin.html in repo root)", 404)
 
-# ======================================================
-# 🏁 Run locally
-# ======================================================
+# ---------------- Local dev ----------------
 if __name__ == "__main__":
-    # For local dev; on Render you'll run via:
-    # gunicorn app:app --bind 0.0.0.0:$PORT
+    # On Render: gunicorn api.app:app --bind 0.0.0.0:$PORT
     app.run(host="127.0.0.1", port=8000, debug=True)
