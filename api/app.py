@@ -5,10 +5,22 @@ from pypdf import PdfReader
 import markdown as md
 from openai import OpenAI
 
+# ============================
+# (Dev only) load .env.local if present
+# ============================
+try:
+    from dotenv import load_dotenv
+    load_dotenv(".env.local")
+except Exception:
+    pass
+
 # ======================================================
-# 🔑 OpenAI Configuration (replace with your own key!)
+# 🔑 OpenAI Configuration (from environment)
 # ======================================================
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise RuntimeError("Missing OPENAI_API_KEY. Set it in your host's Environment Variables.")
+
 # Choose defaults (can be overridden in /api/ask by `mode`)
 DEFAULT_MODE = "fast"   # fast | quality | cheap
 CHAT_MODELS = {
@@ -17,16 +29,17 @@ CHAT_MODELS = {
     "cheap":   "gpt-4o-mini"
 }
 EMBED_MODEL = "text-embedding-3-small"
+EMBED_DIM = 1536  # embedding size for text-embedding-3-small
 
 # OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ======================================================
-# 📂 Project paths
+# 📂 Project paths (keep folders next to this file)
 # ======================================================
 APP_DIR = os.path.dirname(__file__)
-STATIC_DIR = os.path.join(APP_DIR, "..", "static")
-DOCS_DIR   = os.path.join(APP_DIR, "..", "docs")
+STATIC_DIR = os.path.join(APP_DIR, "static")
+DOCS_DIR   = os.path.join(APP_DIR, "docs")
 
 # Flask app
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="/static")
@@ -37,6 +50,7 @@ app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="/static")
 VECTORS = None        # np.ndarray [n, d]
 CHUNKS = []           # list[str]
 SOURCES = []          # list[str]
+INDEX_READY = False   # lazy-build flag
 
 # ======================================================
 # 🔧 Helper functions
@@ -55,6 +69,8 @@ def read_pdf(path):
 
 def load_documents():
     docs = []
+    if not os.path.isdir(DOCS_DIR):
+        return docs
     for path in glob.glob(os.path.join(DOCS_DIR, "**/*"), recursive=True):
         if os.path.isdir(path):
             continue
@@ -90,7 +106,8 @@ def cosine_sim(all_vecs, qvec):
     return np.dot(all_norm, qnorm)
 
 def build_index():
-    global VECTORS, CHUNKS, SOURCES
+    """(Re)build the in-memory index. Safe to call multiple times."""
+    global VECTORS, CHUNKS, SOURCES, INDEX_READY
     CHUNKS, SOURCES = [], []
     docs = load_documents()
     for d in docs:
@@ -100,9 +117,17 @@ def build_index():
     if CHUNKS:
         VECTORS = embed_texts(CHUNKS)
     else:
-        VECTORS = np.zeros((0, 1536), dtype=np.float32)  # embed dim fixed
+        VECTORS = np.zeros((0, EMBED_DIM), dtype=np.float32)  # keep embed dim stable
+    INDEX_READY = True
+
+def ensure_index():
+    """Lazy build to avoid heavy work during cold boot."""
+    global INDEX_READY
+    if not INDEX_READY:
+        build_index()
 
 def search_top_k(query, k=5):
+    ensure_index()
     if VECTORS is None or VECTORS.shape[0] == 0:
         return []
     qvec = embed_texts([query])[0]
@@ -115,23 +140,28 @@ def resolve_chat_model(mode: str) -> str:
 
 def call_llm(system_prompt, user_prompt, mode=None):
     model = resolve_chat_model(mode)
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role":"system","content":system_prompt},
-            {"role":"user","content":user_prompt}
-        ],
-        temperature=0.2
-    )
-    return resp.choices[0].message.content, model
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role":"system","content":system_prompt},
+                {"role":"user","content":user_prompt}
+            ],
+            temperature=0.2
+        )
+        return resp.choices[0].message.content, model
+    except Exception as e:
+        # Return an error message to the client (helps with logs on Render)
+        return f"LLM error: {e}", model
 
 # ======================================================
-# 🚀 Cold start indexing
+# 🚀 Cold start indexing (best-effort, non-fatal)
 # ======================================================
 try:
-    build_index()
+    # Optionally skip initial build; lazy build will handle first request
+    pass
 except Exception as e:
-    print("Index build error:", e)
+    print("Index build error at startup (will lazy-build later):", e)
 
 # ======================================================
 # 🌐 Routes
@@ -160,28 +190,33 @@ def ask():
 @app.route("/api/reindex", methods=["POST"])
 def reindex():
     build_index()
-    return jsonify({"status": "ok", "message": "Reindexed in memory."})
+    return jsonify({"status": "ok", "message": "Reindexed in memory.", "chunks": len(CHUNKS)})
 
 @app.route("/api/health")
 def health():
     return jsonify({
         "status": "ok",
+        "has_openai_key": bool(os.getenv("OPENAI_API_KEY")),
         "embedding_model": EMBED_MODEL,
         "chat_models": CHAT_MODELS,
-        "default_mode": DEFAULT_MODE
+        "default_mode": DEFAULT_MODE,
+        "index_ready": INDEX_READY,
+        "chunks": len(CHUNKS)
     })
 
 # Serve UI pages
 @app.route("/")
 def root():
-    return send_from_directory(os.path.join(APP_DIR, ".."), "index.html")
+    return send_from_directory(APP_DIR, "index.html")
 
 @app.route("/admin")
 def admin_page():
-    return send_from_directory(os.path.join(APP_DIR, ".."), "admin.html")
+    return send_from_directory(APP_DIR, "admin.html")
 
 # ======================================================
 # 🏁 Run locally
 # ======================================================
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    # For local dev; on Render you'll run via:
+    # gunicorn app:app --bind 0.0.0.0:$PORT
+    app.run(host="127.0.0.1", port=8000, debug=True)
